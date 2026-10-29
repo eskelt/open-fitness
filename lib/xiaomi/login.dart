@@ -68,7 +68,8 @@ class XiaomiLogin {
 
   /// [extraCookies] are added next to the deviceId cookie in serviceLoginAuth2.
   /// After passing verification in the WebView, the login is retried with the
-  /// passportsecurity_ph/slh cookies, which makes the server return securityStatus=0.
+  /// credential cookies it left behind (passToken/passInfo/userId/cUserId),
+  /// which makes the server return securityStatus=0 + ssecurity.
   Future<XiaomiSession> login(String user, String password,
       {String region = 'de', Map<String, String> extraCookies = const {}}) async {
     final client = http.Client();
