@@ -135,4 +135,16 @@ class Repository extends ChangeNotifier {
   List<SportRecord> get runs =>
       records.where((r) => r.isRunning).toList()
         ..sort((a, b) => b.time.compareTo(a.time));
+
+  /// Testing: fetch FDS pre-signed download URLs for a record's detail file(s).
+  Future<Map<String, dynamic>> fdsDownloadUrls(List<SportRecord> records) {
+    if (session == null) throw StateError('no session');
+    return XiaomiApi(session!).getFDSDownloadUrls(records);
+  }
+
+  /// Testing: download + decrypt a record's detail blob from FDS.
+  Future<Uint8List> fdsRecordDetail(SportRecord r) {
+    if (session == null) throw StateError('no session');
+    return XiaomiApi(session!).fetchRecordDetail(r);
+  }
 }

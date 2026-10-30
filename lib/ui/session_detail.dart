@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
+import '../data/repository.dart';
+import '../xiaomi/api.dart';
 import '../xiaomi/models.dart';
 import '../sports/sport.dart';
 import '../stats/stats.dart';
@@ -62,7 +65,17 @@ class SessionDetailScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: Text(sportLabel(t, sport))),
+      appBar: AppBar(
+        title: Text(sportLabel(t, sport)),
+        actions: [
+          if (kDebugMode)
+            IconButton(
+              tooltip: 'FDS detail (debug)',
+              icon: const Icon(Icons.cloud_download_outlined),
+              onPressed: () => _debugFetchFds(context),
+            ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -101,6 +114,57 @@ class SessionDetailScreen extends StatelessWidget {
             _section(context, t.detPredictions, _grid(preds)),
           ],
           const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  /// Debug-only: request the FDS pre-signed download URL(s) for this session's
+  /// detail file and show the raw response, to validate the object-key
+  /// derivation. Logs to console too.
+  Future<void> _debugFetchFds(BuildContext context) async {
+    final objectKey = XiaomiApi.fdsRecordObjectKey(
+      sid: r.sid,
+      startSec: r.time,
+      tz15: r.zoneOffsetSec ~/ 900,
+      protoType: r.protoType,
+    );
+    final serverKey = XiaomiApi.fdsServerKey(objectKey, r.time);
+    final header = 'sid=${r.sid} time=${r.time} tz15=${r.zoneOffsetSec ~/ 900} '
+        'proto=${r.protoType} version=${r.version}\nserverKey=$serverKey';
+    debugPrint('[FDS] request: $header');
+    String body;
+    try {
+      final bytes = await repo.fdsRecordDetail(r);
+      final preview = bytes.take(160).toList();
+      final hex = preview
+          .map((b) => b.toRadixString(16).padLeft(2, '0'))
+          .join(' ');
+      final ascii = preview
+          .map((b) => (b >= 32 && b < 127) ? String.fromCharCode(b) : '.')
+          .join();
+      body = 'DECRYPTED blob: ${bytes.length} bytes\n\nHEX (first 160):\n$hex'
+          '\n\nASCII:\n$ascii';
+      debugPrint('[FDS] decrypted ${bytes.length} bytes\n$hex');
+    } catch (e) {
+      body = 'ERROR: $e';
+      debugPrint('[FDS] $body');
+    }
+    if (!context.mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('FDS detail (debug)'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText('$header\n\n$body',
+                style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
         ],
       ),
     );

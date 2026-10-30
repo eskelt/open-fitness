@@ -43,6 +43,7 @@ dependencies:
   intl: ^0.19.0              # date/number formatting
   android_id: ^0.4.0         # stable ANDROID_ID as deviceId (like Mi Fitness)
   flutter_inappwebview: ^6.1.5 # device verification in a WebView with the deviceId cookie
+  encrypt: ^5.0.3            # AES-CBC to decrypt FDS detail blobs
 
 dev_dependencies:
   flutter_test:
