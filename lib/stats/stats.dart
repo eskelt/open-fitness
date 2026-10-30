@@ -193,6 +193,18 @@ class StatsTime {
   static Set<DateTime> activeDays(List<SportRecord> rs) => rs
       .map((r) => DateTime(r.localStart.year, r.localStart.month, r.localStart.day))
       .toSet();
+
+  /// Total distance (m) per local day, for the activity calendar: the key set
+  /// are the active days, the value drives the cell's intensity.
+  static Map<DateTime, int> distanceByDay(List<SportRecord> rs) {
+    final map = <DateTime, int>{};
+    for (final r in rs) {
+      final s = r.localStart;
+      final day = DateTime(s.year, s.month, s.day);
+      map[day] = (map[day] ?? 0) + r.distanceM;
+    }
+    return map;
+  }
 }
 
 /// A selectable time window for the overview stats.

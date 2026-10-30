@@ -37,6 +37,9 @@
   "sportCanoeing": "Piragüismo",
 
   "secSummary": "Resumen",
+  "secActivity": "Actividad",
+  "showMore": "Ver más",
+  "showLess": "Ver menos",
   "secWeeklyVolume": "Volumen semanal",
   "secRecords": "Récords personales",
   "secHrZones": "Zonas de frecuencia cardiaca",
