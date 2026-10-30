@@ -3,8 +3,9 @@ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'data/repository.dart';
 import 'locale_controller.dart';
-import 'ui/home_screen.dart';
+import 'ui/root_shell.dart';
 import 'ui/settings_screen.dart';
+import 'ui/theme/theme.dart';
 import 'ui/verify_webview.dart';
 import 'xiaomi/login.dart';
 
@@ -13,41 +14,6 @@ Future<void> main() async {
   await initializeDateFormatting();
   await localeController.load();
   runApp(const OpenFitnessApp());
-}
-
-/// Clean dark theme: neutral grey surfaces (no brown tint), white text,
-/// brand orange only as an accent.
-ThemeData _buildTheme() {
-  const accent = Color(0xFFFF6D00);
-  const bg = Color(0xFF121212);
-  const surface = Color(0xFF1D1D1F);
-  final scheme = ColorScheme.fromSeed(
-    seedColor: accent,
-    brightness: Brightness.dark,
-  ).copyWith(
-    surface: bg,
-    surfaceContainerHighest: const Color(0xFF2A2A2D),
-    primary: accent,
-  );
-  return ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.dark,
-    colorScheme: scheme,
-    scaffoldBackgroundColor: bg,
-    cardTheme: const CardThemeData(
-      color: surface,
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16))),
-    ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: bg,
-      surfaceTintColor: Colors.transparent,
-      centerTitle: false,
-    ),
-    chipTheme: const ChipThemeData(showCheckmark: false),
-  );
 }
 
 class OpenFitnessApp extends StatelessWidget {
@@ -60,7 +26,7 @@ class OpenFitnessApp extends StatelessWidget {
         return MaterialApp(
           title: 'Open Fitness',
           debugShowCheckedModeBanner: false,
-          theme: _buildTheme(),
+          theme: buildOpenFitnessTheme(),
           locale: locale,
           localizationsDelegates: L.localizationsDelegates,
           supportedLocales: L.supportedLocales,
@@ -99,7 +65,7 @@ class _GateState extends State<Gate> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return _logged
-        ? HomeScreen(onLogout: () => setState(() => _logged = false))
+        ? RootShell(onLogout: () => setState(() => _logged = false))
         : LoginScreen(onLogin: () => setState(() => _logged = true));
   }
 }

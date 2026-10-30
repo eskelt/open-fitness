@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
-import 'package:intl/intl.dart';
 import '../data/repository.dart';
 import '../sports/sport.dart';
 import '../stats/stats.dart';
 import '../xiaomi/models.dart';
 import 'charts.dart';
-import 'format.dart';
 import 'i18n_helpers.dart';
 import 'session_detail.dart';
 import 'settings_screen.dart';
+import 'widgets/activity_list.dart';
+import 'widgets/range_filter.dart';
+import 'widgets/records_list.dart';
+import 'widgets/section_card.dart';
+import 'widgets/summary_card.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback onLogout;
-  const HomeScreen({super.key, required this.onLogout});
+
+  /// Called from the "See all" action on the recent-activities section (the
+  /// shell switches to the History tab).
+  final VoidCallback? onSeeAllActivities;
+  const HomeScreen({
+    super.key,
+    required this.onLogout,
+    this.onSeeAllActivities,
+  });
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -21,6 +32,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _busy = false;
   String? _error;
+  StatsRange _range = StatsRange.month;
 
   @override
   void initState() {
@@ -43,6 +55,9 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  void _openSession(SportRecord r) => Navigator.push(
+      context, MaterialPageRoute(builder: (_) => SessionDetailScreen(r)));
 
   @override
   Widget build(BuildContext context) {
@@ -106,7 +121,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _content(
       BuildContext context, L t, Sport sport, List<SportRecord> records) {
-    final totals = Totals.from(records);
+    // The filter scopes the overview hero; the trend/records/recent sections
+    // stay global (all-time) by design.
+    final rangeRecords = recordsInRange(records, _range);
+    final totals = Totals.from(rangeRecords);
+    final previous = _range == StatsRange.all
+        ? null
+        : Totals.from(recordsInPreviousRange(records, _range));
     final weeks = StatsTime.weekly(records, weeks: 12);
     final pr = PersonalRecords.from(records);
     final zones = HrZoneTotals.from(records);
@@ -115,208 +136,36 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _summaryCard(context, t, sport, totals, records),
-        _card(context, t.secWeeklyVolume,
-            WeeklyVolumeChart(
-                weeks: weeks,
-                useDistance: sport.hasDistance,
-                locale: locale)),
-        if (sport.hasDistance || totals.durationSec > 0)
-          _card(context, t.secRecords, _recordsGrid(context, t, sport, pr)),
+        RangeFilter(
+            value: _range, onChanged: (r) => setState(() => _range = r)),
+        SummaryCard(
+            sport: sport, range: _range, totals: totals, previous: previous),
+        SectionCard(
+          title: t.secWeeklyVolume,
+          child: WeeklyVolumeChart(
+              weeks: weeks, useDistance: sport.hasDistance, locale: locale),
+        ),
+        SectionCard(
+          title: t.secRecords,
+          child: RecordsList(sport: sport, records: pr, onSelect: _openSession),
+        ),
         if (zones.total > 0)
-          _card(context, t.secHrZones,
-              HrZonesBar(zones: zones, names: hrZoneNames(t))),
-        _recentList(context, t, records),
+          SectionCard(
+            title: t.secHrZones,
+            child: HrZonesBar(zones: zones, names: hrZoneNames(t)),
+          ),
+        SectionCard(
+          title: t.secRecent,
+          action: widget.onSeeAllActivities == null
+              ? null
+              : TextButton(
+                  onPressed: widget.onSeeAllActivities,
+                  child: Text(t.seeAll)),
+          child: ActivityList(
+              records: records.take(6).toList(), onSelect: _openSession),
+        ),
         const SizedBox(height: 24),
       ],
-    );
-  }
-
-  Widget _card(BuildContext context, String title, Widget child) => Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-        child: Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                child,
-              ],
-            ),
-          ),
-        ),
-      );
-
-  Widget _summaryCard(BuildContext context, L t, Sport sport, Totals totals,
-      List<SportRecord> records) {
-    final tiles = <Widget>[
-      if (sport.hasDistance)
-        _stat(context, t.statDistance,
-            fmtDistanceKm(totals.distanceM, decimals: 1), t.unitKm),
-      _stat(context, t.statTime, fmtDurationLong(totals.durationSec), ''),
-      if (sport.hasPace && totals.avgPace > 0)
-        _stat(context, t.statAvgPace, fmtPace(totals.avgPace), t.paceUnit),
-      if (totals.avgHr > 0)
-        _stat(context, t.statAvgHr, '${totals.avgHr}', t.unitBpm),
-      _stat(context, t.statCalories, '${totals.calories}', t.unitKcal),
-      if (sport.hasDistance)
-        _stat(context, t.statThisWeek,
-            fmtDistanceKm(StatsTime.distanceThisWeek(records), decimals: 1),
-            t.unitKm),
-      if (sport.hasDistance)
-        _stat(context, t.statThisMonth,
-            fmtDistanceKm(StatsTime.distanceThisMonth(records), decimals: 1),
-            t.unitKm),
-    ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Wrap(
-            spacing: 24,
-            runSpacing: 16,
-            children: tiles,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _stat(BuildContext context, String label, String value, String unit) {
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    return SizedBox(
-      width: 100,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(fontSize: 12, color: muted)),
-          const SizedBox(height: 2),
-          Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                    text: value,
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: onSurface)),
-                if (unit.isNotEmpty)
-                  TextSpan(
-                      text: ' $unit',
-                      style: TextStyle(fontSize: 12, color: muted)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _recordsGrid(
-      BuildContext context, L t, Sport sport, PersonalRecords pr) {
-    final items = <Widget>[];
-    void add(String label, Record? rec, String Function(Record) fmt) {
-      if (rec == null) return;
-      items.add(_recordTile(context, label, fmt(rec), rec.record));
-    }
-
-    if (sport.hasDistance) {
-      add(t.recLongestDist, pr.longestDistance,
-          (r) => '${fmtDistanceKm(r.value.round())} ${t.unitKm}');
-    }
-    add(t.recLongestTime, pr.longestDuration,
-        (r) => fmtDuration(r.value.round()));
-    if (sport.hasPace) {
-      add(t.recFastestPace, pr.fastestPace,
-          (r) => '${fmtPace(r.value.round())} ${t.paceUnit}');
-    }
-    add(t.recBestVo2, pr.bestVo2max, (r) => '${r.value.round()}');
-    add(t.recMostCal, pr.mostCalories, (r) => '${r.value.round()} ${t.unitKcal}');
-    add(t.recBestEffect, pr.bestTrainEffect,
-        (r) => r.value.toStringAsFixed(1));
-
-    return Column(children: items);
-  }
-
-  Widget _recordTile(
-      BuildContext context, String label, String value, SportRecord r) {
-    final locale = Localizations.localeOf(context).toString();
-    final d = DateFormat('d MMM yyyy', locale).format(r.localStart);
-    return InkWell(
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => SessionDetailScreen(r))),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          children: [
-            Expanded(child: Text(label, style: const TextStyle(fontSize: 14))),
-            Text(value,
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(width: 10),
-            SizedBox(
-                width: 78,
-                child: Text(d,
-                    textAlign: TextAlign.right,
-                    style:
-                        const TextStyle(fontSize: 11, color: Colors.grey))),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _recentList(BuildContext context, L t, List<SportRecord> records) {
-    final recent = records.take(20).toList();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-      child: Card(
-        margin: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(t.secRecent,
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 4),
-              for (final r in recent) _RunTile(r),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RunTile extends StatelessWidget {
-  final SportRecord r;
-  const _RunTile(this.r);
-
-  @override
-  Widget build(BuildContext context) {
-    final t = L.of(context);
-    final sport = Sports.of(r.category);
-    final locale = Localizations.localeOf(context).toString();
-    final d = DateFormat('EEE d MMM, HH:mm', locale).format(r.localStart);
-    final main = sport.hasDistance
-        ? '${fmtDistanceKm(r.distanceM)} ${t.unitKm}  ·  ${fmtPace(r.avgPace)} ${t.paceUnit}'
-        : fmtDuration(r.durationSec);
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(sport.icon),
-      title: Text(main),
-      subtitle: Text('$d  ·  ${fmtDuration(r.durationSec)}'
-          '${r.avgHr > 0 ? '  ·  ${t.hr} ${r.avgHr}' : ''}'),
-      trailing: const Icon(Icons.chevron_right, size: 20),
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => SessionDetailScreen(r))),
     );
   }
 }
