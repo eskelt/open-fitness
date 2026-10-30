@@ -8,6 +8,7 @@ import 'charts.dart';
 import 'i18n_helpers.dart';
 import 'session_detail.dart';
 import 'settings_screen.dart';
+import 'widgets/activity_calendar.dart';
 import 'widgets/activity_list.dart';
 import 'widgets/range_filter.dart';
 import 'widgets/records_list.dart';
@@ -140,6 +141,11 @@ class _HomeScreenState extends State<HomeScreen> {
             value: _range, onChanged: (r) => setState(() => _range = r)),
         SummaryCard(
             sport: sport, range: _range, totals: totals, previous: previous),
+        SectionCard(
+          title: t.secActivity,
+          child: ActivityCalendar(
+              byDay: StatsTime.distanceByDay(records), locale: locale),
+        ),
         SectionCard(
           title: t.secWeeklyVolume,
           child: WeeklyVolumeChart(

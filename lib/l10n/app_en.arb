@@ -38,6 +38,9 @@
   "sportCanoeing": "Canoeing",
 
   "secSummary": "Summary",
+  "secActivity": "Activity",
+  "showMore": "Show more",
+  "showLess": "Show less",
   "secWeeklyVolume": "Weekly volume",
   "secRecords": "Personal records",
   "secHrZones": "Heart-rate zones",
