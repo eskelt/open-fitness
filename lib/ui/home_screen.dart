@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:intl/intl.dart';
 import '../data/repository.dart';
 import '../sports/sport.dart';
 import '../stats/stats.dart';
@@ -59,6 +60,53 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _openSession(SportRecord r) => Navigator.push(
       context, MaterialPageRoute(builder: (_) => SessionDetailScreen(r)));
+
+  /// From a calendar day: open its session directly, or let the user pick when
+  /// there is more than one that day.
+  void _openDay(List<SportRecord> all, DateTime day) {
+    final dayRuns = all.where((r) {
+      final s = r.localStart;
+      return s.year == day.year && s.month == day.month && s.day == day.day;
+    }).toList()
+      ..sort((a, b) => b.time.compareTo(a.time));
+    if (dayRuns.isEmpty) return;
+    if (dayRuns.length == 1) {
+      _openSession(dayRuns.first);
+      return;
+    }
+    final locale = Localizations.localeOf(context).toString();
+    final raw = DateFormat('EEEE d MMM', locale).format(day);
+    final title = raw.isEmpty ? raw : raw[0].toUpperCase() + raw.substring(1);
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(title,
+                  style: Theme.of(ctx).textTheme.titleMedium),
+            ),
+            for (final r in dayRuns)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: ActivityTile(
+                  record: r,
+                  onSelect: (sel) {
+                    Navigator.pop(ctx);
+                    _openSession(sel);
+                  },
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -144,7 +192,10 @@ class _HomeScreenState extends State<HomeScreen> {
         SectionCard(
           title: t.secActivity,
           child: ActivityCalendar(
-              byDay: StatsTime.distanceByDay(records), locale: locale),
+            byDay: StatsTime.distanceByDay(records),
+            locale: locale,
+            onSelectDay: (day) => _openDay(records, day),
+          ),
         ),
         SectionCard(
           title: t.secWeeklyVolume,
