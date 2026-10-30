@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:android_id/android_id.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../xiaomi/login.dart';
@@ -12,7 +13,11 @@ final repo = Repository();
 
 /// Orchestrates session + data. Persists deviceId and the session to avoid
 /// re-logging in.
-class Repository {
+///
+/// It is a [ChangeNotifier]: it calls [notifyListeners] whenever the session or
+/// the records change, so any screen can rebuild from it with a
+/// `ListenableBuilder(listenable: repo, ...)` without threading callbacks.
+class Repository extends ChangeNotifier {
   static const _kDeviceId = 'device_id';
   static const _kSession = 'session';
   static const _kRunsCache = 'runs_cache';
@@ -78,6 +83,7 @@ class Repository {
     session = s;
     final p = await SharedPreferences.getInstance();
     await p.setString(_kSession, json.encode(s.toJson()));
+    notifyListeners();
   }
 
   Future<void> logout() async {
@@ -86,6 +92,7 @@ class Repository {
     await p.remove(_kRunsCache);
     session = null;
     records = [];
+    notifyListeners();
   }
 
   /// Downloads all sessions (every sport), paging, and caches them.
@@ -113,6 +120,7 @@ class Repository {
       // live update so the UI starts showing data.
       records = byId.values.map(SportRecord.fromItem).toList();
       onProgress?.call();
+      notifyListeners();
 
       final hasMore = result?['has_more'] == true;
       nextKey = (result?['next_key'] ?? '').toString();

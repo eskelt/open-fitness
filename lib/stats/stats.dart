@@ -195,6 +195,84 @@ class StatsTime {
       .toSet();
 }
 
+/// A selectable time window for the overview stats.
+enum StatsRange { week, month, year, all }
+
+extension StatsRangeX on StatsRange {
+  /// Inclusive start of this range relative to [now]. `all` -> null (no bound).
+  DateTime? start(DateTime now) {
+    switch (this) {
+      case StatsRange.week:
+        return StatsTime.weekStart(now);
+      case StatsRange.month:
+        return DateTime(now.year, now.month, 1);
+      case StatsRange.year:
+        return DateTime(now.year, 1, 1);
+      case StatsRange.all:
+        return null;
+    }
+  }
+
+  /// The previous equivalent window [start, end) used for deltas. `all` -> null.
+  (DateTime, DateTime)? previous(DateTime now) {
+    switch (this) {
+      case StatsRange.week:
+        final s = StatsTime.weekStart(now);
+        return (DateTime(s.year, s.month, s.day - 7), s);
+      case StatsRange.month:
+        return (DateTime(now.year, now.month - 1, 1),
+            DateTime(now.year, now.month, 1));
+      case StatsRange.year:
+        return (DateTime(now.year - 1, 1, 1), DateTime(now.year, 1, 1));
+      case StatsRange.all:
+        return null;
+    }
+  }
+}
+
+/// Records within [range] relative to [now] (defaults to now).
+List<SportRecord> recordsInRange(List<SportRecord> rs, StatsRange range,
+    [DateTime? now]) {
+  final start = range.start(now ?? DateTime.now());
+  if (start == null) return rs;
+  return rs.where((r) => !r.localStart.isBefore(start)).toList();
+}
+
+/// Records within the previous equivalent window (for deltas); empty for `all`.
+List<SportRecord> recordsInPreviousRange(List<SportRecord> rs, StatsRange range,
+    [DateTime? now]) {
+  final p = range.previous(now ?? DateTime.now());
+  if (p == null) return const [];
+  final (ps, pe) = p;
+  return rs
+      .where((r) => !r.localStart.isBefore(ps) && r.localStart.isBefore(pe))
+      .toList();
+}
+
+/// A calendar month with its sessions (sorted newest first) for the History
+/// screen. [month] is the first day of the month in local time.
+class MonthGroup {
+  final DateTime month;
+  final List<SportRecord> records;
+  const MonthGroup(this.month, this.records);
+  Totals get totals => Totals.from(records);
+}
+
+/// Groups sessions by calendar month, newest month first, each month's sessions
+/// newest first.
+List<MonthGroup> groupByMonth(List<SportRecord> rs) {
+  final map = <DateTime, List<SportRecord>>{};
+  for (final r in rs) {
+    final s = r.localStart;
+    (map[DateTime(s.year, s.month)] ??= []).add(r);
+  }
+  return map.entries
+      .map((e) => MonthGroup(
+          e.key, e.value..sort((a, b) => b.time.compareTo(a.time))))
+      .toList()
+    ..sort((a, b) => b.month.compareTo(a.month));
+}
+
 /// Groups sessions by sport category (for the sport selector).
 Map<Sport, List<SportRecord>> groupBySport(List<SportRecord> rs) {
   final map = <String, List<SportRecord>>{};
