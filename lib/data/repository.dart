@@ -175,20 +175,35 @@ class Repository extends ChangeNotifier {
     await p.setString(_kBeCache, json.encode(_beCache));
   }
 
-  /// Runs that can have a detail file (long enough + a server version).
-  List<SportRecord> get _beRuns =>
-      runs.where((r) => r.distanceM >= 1000 && r.version > 0).toList();
+  /// Runs eligible for best-effort analysis: outdoor (reliable per-second GPS
+  /// distance — indoor/treadmill runs have no GPS so their distance stream is
+  /// unreliable), long enough, and with a server detail version.
+  List<SportRecord> get _beRuns => runs
+      .where((r) => r.isOutdoor && r.distanceM >= 1000 && r.version > 0)
+      .toList();
 
-  /// Best efforts for one run (cached; null when it has no detail file).
+  /// Fetches, parses and computes one run's best efforts. Returns null when the
+  /// run has no detail file, errors, or the parsed distance doesn't match the
+  /// summary (an unreliable parse — e.g. a non-GPS activity).
+  Future<List<double?>?> _computeEfforts(SportRecord r) async {
+    try {
+      final track = parseRecordTrack(await fdsRecordDetail(r));
+      if (track.isEmpty) return null;
+      if (r.distanceM > 0 &&
+          (track.totalDistance - r.distanceM).abs() > r.distanceM * 0.25) {
+        return null; // parsed distance far from summary -> not trustworthy
+      }
+      return bestEfforts(track);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Best efforts for one run (cached; null when unavailable/unreliable).
   Future<List<double?>?> runBestEfforts(SportRecord r) async {
     final cache = await _loadBeCache();
     if (cache.containsKey(r.id)) return cache[r.id];
-    List<double?>? result;
-    try {
-      result = bestEfforts(parseRecordTrack(await fdsRecordDetail(r)));
-    } catch (_) {
-      result = null; // no detail / error: cache so we don't refetch
-    }
+    final result = await _computeEfforts(r);
     cache[r.id] = result;
     await _saveBeCache();
     return result;
@@ -202,11 +217,7 @@ class Repository extends ChangeNotifier {
     var done = 0;
     for (final r in rs) {
       if (!cache.containsKey(r.id)) {
-        try {
-          cache[r.id] = bestEfforts(parseRecordTrack(await fdsRecordDetail(r)));
-        } catch (_) {
-          cache[r.id] = null;
-        }
+        cache[r.id] = await _computeEfforts(r);
         await _saveBeCache();
       }
       onProgress?.call(++done, rs.length);
@@ -228,7 +239,7 @@ class Repository extends ChangeNotifier {
     for (final e in cache.entries) {
       final efforts = e.value;
       final r = byId[e.key];
-      if (efforts == null || r == null) continue;
+      if (efforts == null || r == null || !r.isOutdoor) continue;
       for (var i = 0; i < out.length && i < efforts.length; i++) {
         final tm = efforts[i];
         if (tm != null) out[i].add(MapEntry(r, tm));
