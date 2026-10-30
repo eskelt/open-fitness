@@ -182,9 +182,7 @@ class _BestEffortsSectionState extends State<_BestEffortsSection> {
 
   Future<List<double?>> _load() async {
     final bytes = await repo.fdsRecordDetail(widget.record);
-    final track =
-        parseRecordTrack(bytes, summaryDistanceM: widget.record.distanceM);
-    return bestEfforts(track);
+    return bestEfforts(parseRecordTrack(bytes));
   }
 
   static const _labels = ['1 km', '1 mi', '5 km', '10 km', '21.1 km', '42.2 km'];
