@@ -178,6 +178,28 @@ class _EvolutionScreen extends StatelessWidget {
         child: LineChart(LineChartData(
           minY: minY - pad,
           maxY: maxY + pad,
+          lineTouchData: LineTouchData(
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipItems: (spots) => spots.map((s) {
+                final i = s.x.round();
+                final date = (i >= 0 && i < byDate.length)
+                    ? DateFormat('d MMM yyyy', locale)
+                        .format(byDate[i].key.localStart)
+                    : '';
+                return LineTooltipItem(
+                  fmtDuration((s.y * 60).round()),
+                  const TextStyle(
+                      fontWeight: FontWeight.w700, color: Colors.white),
+                  children: [
+                    TextSpan(
+                        text: '\n$date',
+                        style: const TextStyle(
+                            fontSize: 10, color: Colors.white70)),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
           gridData: FlGridData(show: true, drawVerticalLine: false),
           borderData: FlBorderData(show: false),
           titlesData: FlTitlesData(
