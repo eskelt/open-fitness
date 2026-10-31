@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
-import '../xiaomi/models.dart';
-import '../sports/sport.dart';
+import '../data/repository.dart';
+import '../stats/best_efforts.dart';
 import '../stats/stats.dart';
+import '../xiaomi/models.dart';
+import '../xiaomi/record_detail.dart';
+import '../sports/sport.dart';
 import 'charts.dart';
 import 'format.dart';
 import 'i18n_helpers.dart';
@@ -78,6 +81,10 @@ class SessionDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           _section(context, t.detMetrics, _grid(metrics)),
+          if (sport.hasDistance && r.distanceM >= 1000) ...[
+            const SizedBox(height: 20),
+            _section(context, t.secBestEfforts, _BestEffortsSection(r)),
+          ],
           if (hr.isNotEmpty) ...[
             const SizedBox(height: 20),
             _section(
@@ -105,6 +112,7 @@ class SessionDetailScreen extends StatelessWidget {
       ),
     );
   }
+
 
   Widget _section(BuildContext context, String title, Widget child) {
     return Column(
@@ -157,4 +165,74 @@ class _M {
   final String label;
   final String value;
   _M(this.label, this.value);
+}
+
+/// Fetches this session's FDS detail blob, parses the per-second track and
+/// shows the fastest split for each standard distance (Strava-style best
+/// efforts). Loaded on demand with a spinner.
+class _BestEffortsSection extends StatefulWidget {
+  final SportRecord record;
+  const _BestEffortsSection(this.record);
+  @override
+  State<_BestEffortsSection> createState() => _BestEffortsSectionState();
+}
+
+class _BestEffortsSectionState extends State<_BestEffortsSection> {
+  late final Future<List<double?>> _future = _load();
+
+  Future<List<double?>> _load() async {
+    final bytes = await repo.fdsRecordDetail(widget.record);
+    return bestEfforts(parseRecordTrack(bytes));
+  }
+
+  static const _labels = ['1 km', '1 mi', '5 km', '10 km', '21.1 km', '42.2 km'];
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<double?>>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.all(8),
+            child: Center(
+                child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2))),
+          );
+        }
+        if (snap.hasError) {
+          return Text('—',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant));
+        }
+        final efforts = snap.data!;
+        final rows = <Widget>[];
+        for (var i = 0; i < efforts.length; i++) {
+          final e = efforts[i];
+          if (e == null) continue; // run shorter than this distance
+          rows.add(Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Expanded(
+                    child: Text(_labels[i],
+                        style: const TextStyle(fontSize: 14))),
+                Text(fmtDuration(e.round()),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ));
+        }
+        if (rows.isEmpty) {
+          return Text('—',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant));
+        }
+        return Column(children: rows);
+      },
+    );
+  }
 }

@@ -23,7 +23,14 @@
   "refresh": "Recargar",
   "navHome": "Inicio",
   "navHistory": "Historial",
+  "navRecords": "Marcas",
   "seeAll": "Ver todo",
+  "recordsAnalyzing": "Analizando carreras… {done}/{total}",
+  "@recordsAnalyzing": { "placeholders": { "done": { "type": "int" }, "total": { "type": "int" } } },
+  "recordsEmpty": "Aún no hay marcas por distancia. Desliza para actualizar.",
+  "recordsTop": "Top {n}",
+  "@recordsTop": { "placeholders": { "n": { "type": "int" } } },
+  "recordsEvolution": "Evolución",
 
   "sportRunning": "Carrera",
   "sportCycling": "Ciclismo",
@@ -42,6 +49,7 @@
   "showLess": "Ver menos",
   "secWeeklyVolume": "Volumen semanal",
   "secRecords": "Récords personales",
+  "secBestEfforts": "Mejores marcas",
   "secHrZones": "Zonas de frecuencia cardiaca",
   "secRecent": "Sesiones recientes",
 

@@ -4,9 +4,11 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:android_id/android_id.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../stats/best_efforts.dart';
 import '../xiaomi/login.dart';
 import '../xiaomi/api.dart';
 import '../xiaomi/models.dart';
+import '../xiaomi/record_detail.dart';
 
 /// Global app instance.
 final repo = Repository();
@@ -135,4 +137,117 @@ class Repository extends ChangeNotifier {
   List<SportRecord> get runs =>
       records.where((r) => r.isRunning).toList()
         ..sort((a, b) => b.time.compareTo(a.time));
+
+  /// Testing: fetch FDS pre-signed download URLs for a record's detail file(s).
+  Future<Map<String, dynamic>> fdsDownloadUrls(List<SportRecord> records) {
+    if (session == null) throw StateError('no session');
+    return XiaomiApi(session!).getFDSDownloadUrls(records);
+  }
+
+  /// Download + decrypt a record's detail blob from FDS.
+  Future<Uint8List> fdsRecordDetail(SportRecord r) {
+    if (session == null) throw StateError('no session');
+    return XiaomiApi(session!).fetchRecordDetail(r);
+  }
+
+  // --- Best efforts across runs (records by distance) ---
+  static const _kBeCache = 'best_efforts_cache_v1';
+  Map<String, List<double?>?>? _beCache;
+
+  Future<Map<String, List<double?>?>> _loadBeCache() async {
+    if (_beCache != null) return _beCache!;
+    final p = await SharedPreferences.getInstance();
+    final out = <String, List<double?>?>{};
+    final s = p.getString(_kBeCache);
+    if (s != null) {
+      final m = json.decode(s) as Map<String, dynamic>;
+      for (final e in m.entries) {
+        out[e.key] = e.value == null
+            ? null
+            : (e.value as List).map((x) => (x as num?)?.toDouble()).toList();
+      }
+    }
+    return _beCache = out;
+  }
+
+  Future<void> _saveBeCache() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kBeCache, json.encode(_beCache));
+  }
+
+  /// Runs eligible for best-effort analysis: outdoor (reliable per-second GPS
+  /// distance — indoor/treadmill runs have no GPS so their distance stream is
+  /// unreliable), long enough, and with a server detail version.
+  List<SportRecord> get _beRuns => runs
+      .where((r) => r.isOutdoor && r.distanceM >= 1000 && r.version > 0)
+      .toList();
+
+  /// Fetches, parses and computes one run's best efforts. Returns null when the
+  /// run has no detail file, errors, or the parsed distance doesn't match the
+  /// summary (an unreliable parse — e.g. a non-GPS activity).
+  Future<List<double?>?> _computeEfforts(SportRecord r) async {
+    try {
+      final track = parseRecordTrack(await fdsRecordDetail(r));
+      if (track.isEmpty) return null;
+      if (r.distanceM > 0 &&
+          (track.totalDistance - r.distanceM).abs() > r.distanceM * 0.25) {
+        return null; // parsed distance far from summary -> not trustworthy
+      }
+      return bestEfforts(track);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Best efforts for one run (cached; null when unavailable/unreliable).
+  Future<List<double?>?> runBestEfforts(SportRecord r) async {
+    final cache = await _loadBeCache();
+    if (cache.containsKey(r.id)) return cache[r.id];
+    final result = await _computeEfforts(r);
+    cache[r.id] = result;
+    await _saveBeCache();
+    return result;
+  }
+
+  /// Computes + caches best efforts for every run still missing from the cache.
+  Future<void> computeAllBestEfforts(
+      {void Function(int done, int total)? onProgress}) async {
+    final rs = _beRuns;
+    final cache = await _loadBeCache();
+    var done = 0;
+    for (final r in rs) {
+      if (!cache.containsKey(r.id)) {
+        cache[r.id] = await _computeEfforts(r);
+        await _saveBeCache();
+      }
+      onProgress?.call(++done, rs.length);
+    }
+  }
+
+  /// How many runs still need their detail fetched for the records screen.
+  Future<int> pendingBestEfforts() async {
+    final cache = await _loadBeCache();
+    return _beRuns.where((r) => !cache.containsKey(r.id)).length;
+  }
+
+  /// For each best-effort target, the runs that have a time, fastest first.
+  Future<List<List<MapEntry<SportRecord, double>>>> rankedRecords() async {
+    final cache = await _loadBeCache();
+    final byId = {for (final r in records) r.id: r};
+    final out = List.generate(
+        bestEffortTargets.length, (_) => <MapEntry<SportRecord, double>>[]);
+    for (final e in cache.entries) {
+      final efforts = e.value;
+      final r = byId[e.key];
+      if (efforts == null || r == null || !r.isOutdoor) continue;
+      for (var i = 0; i < out.length && i < efforts.length; i++) {
+        final tm = efforts[i];
+        if (tm != null) out[i].add(MapEntry(r, tm));
+      }
+    }
+    for (final list in out) {
+      list.sort((a, b) => a.value.compareTo(b.value));
+    }
+    return out;
+  }
 }

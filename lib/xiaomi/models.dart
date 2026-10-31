@@ -92,6 +92,8 @@ class SportRecord {
 
   int get startTime => _i('start_time') != 0 ? _i('start_time') : time;
   int get endTime => _i('end_time');
+  int get protoType => _i('proto_type'); // used to build the FDS detail file key
+  int get version => _i('version'); // >0 means a detail file exists on FDS
 
   DateTime get localStart => DateTime.fromMillisecondsSinceEpoch(
       (startTime + zoneOffsetSec) * 1000,
