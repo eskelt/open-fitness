@@ -53,6 +53,13 @@
   "secBestEfforts": "Best efforts",
   "secHrZones": "Heart-rate zones",
   "secRecent": "Recent sessions",
+  "secRoute": "Route",
+  "secElevation": "Elevation",
+  "detAscent": "Ascent",
+  "detDescent": "Descent",
+  "routeNoData": "No GPS route for this session",
+  "elevNoData": "Elevation unavailable",
+  "elevSource": "Terrain elevation (Open-Meteo DEM)",
 
   "sessionsCount": "{count, plural, =1{1 session} other{{count} sessions}}",
   "@sessionsCount": { "placeholders": { "count": { "type": "int" } } },
