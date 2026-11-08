@@ -100,18 +100,69 @@ class Repository extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// True when [e] is a "host does not resolve" failure (DNS), as reported for
+  /// region codes without a health data-center host (e.g. India's `in.`).
+  static bool _isHostUnreachable(Object e) {
+    final s = e.toString();
+    return e is SocketException ||
+        s.contains('Failed host lookup') ||
+        s.contains('No address associated with hostname');
+  }
+
+  /// Probes the known data hosts and adopts the right one, persisting it. Called
+  /// only after a DNS failure, so a working host is never changed. Data is
+  /// sharded per region, so the account's home host is the one that returns
+  /// records; a reachable-but-empty host is kept only as a fallback (e.g. an
+  /// account with no activities yet). Returns true if a region was adopted.
+  Future<bool> _adopt(XiaomiSession s) async {
+    session = s;
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_kSession, json.encode(s.toJson()));
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> _recoverRegion() async {
+    XiaomiSession? reachable;
+    for (final r in XiaomiApi.knownRegions) {
+      if (r == session!.region) continue;
+      final candidate = session!.copyWith(region: r);
+      try {
+        final resp = await XiaomiApi(candidate).getSportRecordsByTime(limit: 1);
+        if (resp['code'] != 0) continue;
+        final list = (resp['result']?['sport_records'] as List?) ?? [];
+        if (list.isNotEmpty) return _adopt(candidate); // home region found
+        reachable ??= candidate; // resolves but empty: remember as fallback
+      } catch (_) {
+        // host unreachable or errored: try the next region
+      }
+    }
+    return reachable != null ? _adopt(reachable) : false;
+  }
+
   /// Downloads all sessions (every sport), paging, and caches them.
   /// [onProgress] is called after each page to refresh the UI incrementally.
   Future<void> refresh({void Function()? onProgress}) async {
     if (session == null) throw StateError('no session');
-    final api = XiaomiApi(session!);
+    var api = XiaomiApi(session!);
     // dedup by stable id (sid|key|time): paging can overlap pages.
     final byId = <String, Map<String, dynamic>>{};
     final seenKeys = <String>{};
     String? nextKey;
     for (var page = 0; page < 200; page++) {
-      final resp =
-          await api.getSportRecordsByTime(limit: 50, nextKey: nextKey);
+      Map<String, dynamic> resp;
+      try {
+        resp = await api.getSportRecordsByTime(limit: 50, nextKey: nextKey);
+      } catch (e) {
+        // A region whose host does not resolve (e.g. India's `in.`): probe the
+        // known hosts once, adopt a working one and retry this page.
+        if (page == 0 && _isHostUnreachable(e) && await _recoverRegion()) {
+          api = XiaomiApi(session!);
+          resp = await api.getSportRecordsByTime(limit: 50, nextKey: nextKey);
+        } else {
+          rethrow;
+        }
+      }
       final code = resp['code'];
       if (code != 0) {
         throw Exception('API code=$code: ${resp['message']}');
