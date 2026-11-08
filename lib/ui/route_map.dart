@@ -8,6 +8,7 @@ import '../stats/elevation.dart';
 import '../xiaomi/api.dart' show FdsUnavailableException;
 import '../xiaomi/gps_track.dart';
 import '../xiaomi/models.dart';
+import '../units_controller.dart';
 import 'format.dart';
 
 const _agent = 'com.openfitness.app';
@@ -324,12 +325,12 @@ class _ElevationCardState extends State<_ElevationCard> {
                   children: [
                     Expanded(
                         child: _stat(context, t.detAscent,
-                            '+${p.gain.round()} m', Icons.north_east,
-                            Colors.green.shade600)),
+                            '+${fmtElevation(p.gain)} ${elevUnit(t)}',
+                            Icons.north_east, Colors.green.shade600)),
                     Expanded(
                         child: _stat(context, t.detDescent,
-                            '-${p.loss.round()} m', Icons.south_east,
-                            Colors.red.shade600)),
+                            '-${fmtElevation(p.loss)} ${elevUnit(t)}',
+                            Icons.south_east, Colors.red.shade600)),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -375,7 +376,10 @@ class _ElevationChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final t = L.of(context);
     final color = theme.colorScheme.primary;
+    // The chart keeps its internal scale in km/m; axis labels and the tooltip
+    // are converted to the active unit (miles/feet) for display.
     final spots = [
       for (var i = 0; i < profile.eleM.length; i++)
         FlSpot(profile.distKm[i], profile.eleM[i]),
@@ -400,7 +404,8 @@ class _ElevationChart extends StatelessWidget {
             getTooltipItems: (spots) => [
               for (final s in spots)
                 LineTooltipItem(
-                  '${s.y.round()} m\n${s.x.toStringAsFixed(2)} km',
+                  '${elevToUnit(s.y).round()} ${elevUnit(t)}\n'
+                      '${distanceKmToUnit(s.x).toStringAsFixed(2)} ${distanceUnit(t)}',
                   TextStyle(
                       color: theme.colorScheme.onSurface,
                       fontWeight: FontWeight.w600,
@@ -424,7 +429,7 @@ class _ElevationChart extends StatelessWidget {
               showTitles: true,
               reservedSize: 36,
               interval: yStep,
-              getTitlesWidget: (v, _) => Text('${v.round()}',
+              getTitlesWidget: (v, _) => Text('${elevToUnit(v).round()}',
                   style: TextStyle(
                       fontSize: 10,
                       color: theme.colorScheme.onSurfaceVariant)),
@@ -441,9 +446,11 @@ class _ElevationChart extends StatelessWidget {
               interval: (maxX / 4).clamp(0.5, double.infinity),
               getTitlesWidget: (v, meta) {
                 if (v <= 0 || v >= maxX) return const SizedBox();
+                final xv = distanceKmToUnit(v);
                 return Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: Text(v.toStringAsFixed(0),
+                  child: Text(
+                      xv.toStringAsFixed(unitsController.imperial ? 1 : 0),
                       style: TextStyle(
                           fontSize: 10,
                           color: theme.colorScheme.onSurfaceVariant)),

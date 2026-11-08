@@ -3,7 +3,9 @@ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:intl/intl.dart';
 import '../data/repository.dart';
 import '../stats/best_efforts.dart';
+import '../stats/km_splits.dart';
 import '../stats/stats.dart';
+import '../units_controller.dart';
 import '../xiaomi/models.dart';
 import '../xiaomi/record_detail.dart';
 import '../sports/sport.dart';
@@ -26,22 +28,22 @@ class SessionDetailScreen extends StatelessWidget {
 
     final metrics = <_M>[
       if (sport.hasDistance)
-        _M(t.detDistance, '${fmtDistanceKm(r.distanceM)} ${t.unitKm}'),
+        _M(t.detDistance, '${fmtDistance(r.distanceM)} ${distanceUnit(t)}'),
       _M(t.detDuration, fmtDuration(r.durationSec)),
       if (sport.hasPace && r.avgPace > 0)
-        _M(t.detAvgPace, '${fmtPace(r.avgPace)} ${t.paceUnit}'),
+        _M(t.detAvgPace, '${fmtPace(r.avgPace)} ${paceUnit(t)}'),
       if (sport.hasPace && r.maxPace > 0)
-        _M(t.detMaxPace, '${fmtPace(r.maxPace)} ${t.paceUnit}'),
+        _M(t.detMaxPace, '${fmtPace(r.maxPace)} ${paceUnit(t)}'),
       if (r.avgSpeed > 0)
-        _M(t.detAvgSpeed, '${fmtSpeedKmh(r.avgSpeed)} ${t.unitKmh}'),
+        _M(t.detAvgSpeed, '${fmtSpeed(r.avgSpeed)} ${speedUnit(t)}'),
       if (r.maxSpeed > 0)
-        _M(t.detMaxSpeed, '${fmtSpeedKmh(r.maxSpeed)} ${t.unitKmh}'),
+        _M(t.detMaxSpeed, '${fmtSpeed(r.maxSpeed)} ${speedUnit(t)}'),
       _M(t.detCalories, '${r.calories} ${t.unitKcal}'),
       if (sport.hasSteps && r.steps > 0) _M(t.detSteps, '${r.steps}'),
       if (sport.hasCadence && r.avgCadence > 0)
         _M(t.detAvgCadence, '${r.avgCadence} ${t.unitSpm}'),
       if (sport.hasStride && r.avgStride > 0)
-        _M(t.detStride, '${r.avgStride} ${t.cmUnit}'),
+        _M(t.detStride, '${fmtStride(r.avgStride)} ${strideUnit(t)}'),
       if (r.vo2max > 0) _M(t.detVo2max, '${r.vo2max}'),
       if (r.trainEffect > 0)
         _M(t.detTrainEffect, r.trainEffect.toStringAsFixed(1)),
@@ -87,6 +89,16 @@ class SessionDetailScreen extends StatelessWidget {
             Text(t.secRoute, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 10),
             RouteMapSection(r),
+          ],
+          if (sport.hasDistance && r.isOutdoor && r.distanceM >= 1000) ...[
+            const SizedBox(height: 20),
+            ListenableBuilder(
+              listenable: unitsController,
+              builder: (context, _) => _section(
+                  context,
+                  unitsController.imperial ? t.secSplitsMi : t.secSplits,
+                  _SplitsSection(r)),
+            ),
           ],
           if (sport.hasDistance && r.distanceM >= 1000) ...[
             const SizedBox(height: 20),
@@ -240,6 +252,160 @@ class _BestEffortsSectionState extends State<_BestEffortsSection> {
         }
         return Column(children: rows);
       },
+    );
+  }
+}
+
+/// Per-kilometer speed + average heart rate, rendered as a Mi Fitness-style
+/// table: one row per whole km (plus the final partial), with a bar whose
+/// length is proportional to that km's speed. Loaded on demand with a spinner.
+class _SplitsSection extends StatefulWidget {
+  final SportRecord record;
+  const _SplitsSection(this.record);
+  @override
+  State<_SplitsSection> createState() => _SplitsSectionState();
+}
+
+class _SplitsSectionState extends State<_SplitsSection> {
+  late final Future<RecordTrack> _future = _load();
+
+  Future<RecordTrack> _load() async {
+    final bytes = await repo.fdsRecordDetail(widget.record);
+    return parseRecordTrack(bytes);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = L.of(context);
+    return FutureBuilder<RecordTrack>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.all(8),
+            child: Center(
+                child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2))),
+          );
+        }
+        // Segment by mile when the app is in imperial units, else by kilometer.
+        // Computed here (not cached) so flipping the units setting re-segments.
+        final splits = snap.hasError || snap.data == null
+            ? const <KmSplit>[]
+            : kmSplitStats(snap.data!,
+                segmentM: unitsController.imperial ? 1609.344 : 1000);
+        if (splits.isEmpty) {
+          return Text(t.splitsNoData,
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant));
+        }
+
+        final maxSpeed = splits
+            .map((s) => s.speedKmh)
+            .fold<double>(0, (a, b) => b > a ? b : a);
+        final anyHr = splits.any((s) => s.avgHr > 0);
+
+        final headerStyle = TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.onSurfaceVariant);
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  const SizedBox(width: 34),
+                  Expanded(child: Text(t.colPace, style: headerStyle)),
+                  SizedBox(
+                      width: 70,
+                      child: Text(paceUnit(t),
+                          textAlign: TextAlign.right, style: headerStyle)),
+                  if (anyHr)
+                    SizedBox(
+                        width: 58,
+                        child: Text('${t.colHr} ${t.unitBpm}',
+                            textAlign: TextAlign.right, style: headerStyle)),
+                ],
+              ),
+            ),
+            for (final s in splits)
+              _SplitRow(
+                  split: s, maxSpeed: maxSpeed, showHr: anyHr),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SplitRow extends StatelessWidget {
+  final KmSplit split;
+  final double maxSpeed;
+  final bool showHr;
+  const _SplitRow(
+      {required this.split, required this.maxSpeed, required this.showHr});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final frac =
+        maxSpeed > 0 ? (split.speedKmh / maxSpeed).clamp(0.05, 1.0) : 0.0;
+    final label = split.isPartial
+        ? fmtDistance(split.endDistanceM.round())
+        : '${split.index}';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 34,
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w600)),
+          ),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Container(
+                height: 12,
+                color: cs.surfaceContainerHighest,
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: frac,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: brandAccent,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 70,
+            child: Text(fmtPace(split.paceSecPerKm),
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w700)),
+          ),
+          if (showHr)
+            SizedBox(
+              width: 58,
+              child: Text(split.avgHr > 0 ? '${split.avgHr}' : '—',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurfaceVariant)),
+            ),
+        ],
+      ),
     );
   }
 }

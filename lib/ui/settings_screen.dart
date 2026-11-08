@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import '../locale_controller.dart';
+import '../units_controller.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -9,15 +10,22 @@ class SettingsScreen extends StatelessWidget {
     final t = L.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(t.settings)),
-      body: ValueListenableBuilder<Locale?>(
-        valueListenable: localeController,
-        builder: (context, _, __) {
+      body: ListenableBuilder(
+        listenable: Listenable.merge([localeController, unitsController]),
+        builder: (context, _) {
           final current = localeController.current;
           Widget tile(String code, String label) => RadioListTile<String>(
                 value: code,
                 groupValue: current,
                 title: Text(label),
                 onChanged: (v) => localeController.set(v!),
+              );
+          Widget unitTile(bool imperial, String label) =>
+              RadioListTile<bool>(
+                value: imperial,
+                groupValue: unitsController.imperial,
+                title: Text(label),
+                onChanged: (v) => unitsController.set(v!),
               );
           return ListView(
             children: [
@@ -29,6 +37,14 @@ class SettingsScreen extends StatelessWidget {
               tile('system', t.languageSystem),
               tile('es', t.languageSpanish),
               tile('en', t.languageEnglish),
+              const Divider(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Text(t.units,
+                    style: Theme.of(context).textTheme.titleMedium),
+              ),
+              unitTile(false, t.unitsMetric),
+              unitTile(true, t.unitsImperial),
               const Divider(),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),

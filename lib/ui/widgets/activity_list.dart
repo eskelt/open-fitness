@@ -44,7 +44,7 @@ class ActivityTile extends StatelessWidget {
     final locale = Localizations.localeOf(context).toString();
     final d = DateFormat('EEE d MMM, HH:mm', locale).format(r.localStart);
     final main = sport.hasDistance
-        ? '${fmtDistanceKm(r.distanceM)} ${t.unitKm}  ·  ${fmtPace(r.avgPace)} ${t.paceUnit}'
+        ? '${fmtDistance(r.distanceM)} ${distanceUnit(t)}  ·  ${fmtPace(r.avgPace)} ${paceUnit(t)}'
         : fmtDuration(r.durationSec);
     return ListTile(
       contentPadding: EdgeInsets.zero,

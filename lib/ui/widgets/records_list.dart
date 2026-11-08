@@ -33,13 +33,13 @@ class RecordsList extends StatelessWidget {
 
     if (sport.hasDistance) {
       add(t.recLongestDist, pr.longestDistance,
-          (r) => '${fmtDistanceKm(r.value.round())} ${t.unitKm}');
+          (r) => '${fmtDistance(r.value.round())} ${distanceUnit(t)}');
     }
     add(t.recLongestTime, pr.longestDuration,
         (r) => fmtDuration(r.value.round()));
     if (sport.hasPace) {
       add(t.recFastestPace, pr.fastestPace,
-          (r) => '${fmtPace(r.value.round())} ${t.paceUnit}');
+          (r) => '${fmtPace(r.value.round())} ${paceUnit(t)}');
     }
     add(t.recBestVo2, pr.bestVo2max, (r) => '${r.value.round()}');
     add(t.recMostCal, pr.mostCalories,

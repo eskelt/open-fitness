@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import '../units_controller.dart';
 import 'history_screen.dart';
 import 'home_screen.dart';
 import 'records_screen.dart';
@@ -28,16 +29,22 @@ class _RootShellState extends State<RootShell> {
   Widget build(BuildContext context) {
     final t = L.of(context);
     return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        children: [
-          HomeScreen(
-            onLogout: widget.onLogout,
-            onSeeAllActivities: () => _go(1),
-          ),
-          _visited.contains(1) ? const HistoryScreen() : const SizedBox(),
-          _visited.contains(2) ? const RecordsScreen() : const SizedBox(),
-        ],
+      // Rebuild the tabs when the units setting changes, so distance/pace/speed
+      // on an already-visible screen (e.g. Home) update immediately instead of
+      // waiting for the next data reload or filter change.
+      body: ListenableBuilder(
+        listenable: unitsController,
+        builder: (context, _) => IndexedStack(
+          index: _index,
+          children: [
+            HomeScreen(
+              onLogout: widget.onLogout,
+              onSeeAllActivities: () => _go(1),
+            ),
+            _visited.contains(1) ? HistoryScreen() : const SizedBox(),
+            _visited.contains(2) ? RecordsScreen() : const SizedBox(),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
