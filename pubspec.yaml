@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.2.0+2
+version: 0.3.0+3
 
 environment:
   sdk: ^3.7.0
@@ -44,6 +44,9 @@ dependencies:
   android_id: ^0.4.0         # stable ANDROID_ID as deviceId (like Mi Fitness)
   flutter_inappwebview: ^6.1.5 # device verification in a WebView with the deviceId cookie
   encrypt: ^5.0.3            # AES-CBC to decrypt FDS detail blobs
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+  path_provider: ^2.1.5    # app directory to cache GPS tracks on disk
 
 dev_dependencies:
   flutter_test:

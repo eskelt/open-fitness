@@ -8,6 +8,17 @@ import 'crypto.dart';
 import 'login.dart';
 import 'models.dart';
 
+/// Thrown when an FDS detail file cannot be retrieved: the server returns no
+/// download URL, which in practice means Xiaomi has purged the file (detail
+/// blobs expire after a few months) or never had it. Distinct from network
+/// errors so the UI can say "no longer available" rather than "failed".
+class FdsUnavailableException implements Exception {
+  final String message;
+  FdsUnavailableException(this.message);
+  @override
+  String toString() => 'FdsUnavailableException: $message';
+}
+
 /// Client for the Mi Fitness data API (FitnessApiService), replicating the
 /// CloudInterceptor of 3.59.1i: signing + RC4-drop1024 + regional host.
 class XiaomiApi {
@@ -147,20 +158,22 @@ class XiaomiApi {
   static String _b64url(List<int> bytes) =>
       base64Url.encode(bytes).replaceAll('=', '');
 
-  /// The FDS object key for a running session's detail ("record") file, as
+  /// The FDS object key for a running session's detail file, as
   /// FitnessFDSUploader builds it:
-  ///   keyBytes (LE) = int32(startSec) + byte(tz15) + byte(128 + protoType*4)
+  ///   keyBytes (LE) = int32(startSec) + byte(tz15) + byte(128 + protoType*4 + fileType)
   ///   objectKey = base64url(keyBytes) + "_" + base64url(SHA1(sid))
+  /// [fileType]: 0=record, 1=report, 2=gps, 3=recover.
   static String fdsRecordObjectKey({
     required String sid,
     required int startSec,
     required int tz15,
     required int protoType,
+    int fileType = 0,
   }) {
     final buf = Uint8List(6);
     ByteData.view(buf.buffer).setInt32(0, startSec, Endian.little);
     buf[4] = tz15 & 0xff;
-    buf[5] = (128 + protoType * 4) & 0xff; // dataType=1, dailyType=0, fileType=0
+    buf[5] = (128 + protoType * 4 + fileType) & 0xff; // dataType=1, dailyType=0
     final suffix = _b64url(buf);
     final sidHash = _b64url(sha1Bytes(utf8.encode(sid)));
     return '${suffix}_$sidHash';
@@ -173,7 +186,8 @@ class XiaomiApi {
   /// Requests FDS pre-signed download URLs for one or more records' detail
   /// files. All records must belong to the same watch (`sid`). Returns the raw
   /// decrypted response (so the caller can inspect it while we validate).
-  Future<Map<String, dynamic>> getFDSDownloadUrls(List<SportRecord> records) {
+  Future<Map<String, dynamic>> getFDSDownloadUrls(List<SportRecord> records,
+      {int fileType = 0}) {
     final sid = records.first.sid;
     final items = [
       for (final r in records)
@@ -183,6 +197,7 @@ class XiaomiApi {
             startSec: r.time,
             tz15: r.zoneOffsetSec ~/ 900,
             protoType: r.protoType,
+            fileType: fileType,
           ),
           'timestamp': r.time,
         }
@@ -196,26 +211,40 @@ class XiaomiApi {
         debugLog: true);
   }
 
-  /// Downloads a record's detail file from FDS and decrypts it (AESCoder):
+  /// Downloads a session's per-second "record" detail file (fileType=0) from
+  /// FDS and decrypts it. Returns the raw decrypted blob.
+  Future<Uint8List> fetchRecordDetail(SportRecord r) =>
+      _fetchFdsFile(r, fileType: 0);
+
+  /// Downloads a session's "gps" detail file (fileType=2) from FDS and decrypts
+  /// it. Returns the raw decrypted blob (parse with parseGpsTrack).
+  Future<Uint8List> fetchGpsDetail(SportRecord r) =>
+      _fetchFdsFile(r, fileType: 2);
+
+  /// Downloads one FDS detail file and decrypts it (AESCoder):
   ///   GET url -> base64url body -> AES-128-CBC/PKCS7 (key=obj_key, fixed IV) -> bytes.
-  /// Returns the raw decrypted blob (to be parsed into the per-sample series).
-  Future<Uint8List> fetchRecordDetail(SportRecord r) async {
-    final resp = await getFDSDownloadUrls([r]);
+  Future<Uint8List> _fetchFdsFile(SportRecord r, {required int fileType}) async {
+    final resp = await getFDSDownloadUrls([r], fileType: fileType);
     final result = resp['result'];
     if (result is! Map || result.isEmpty) {
-      throw Exception('FDS: no download url (${resp['message']})');
+      throw FdsUnavailableException('no download url (${resp['message']})');
     }
     final entry = result.values.first;
     if (entry is! Map || entry['url'] == null || entry['obj_key'] == null) {
-      throw Exception('FDS: no detail file for this run (entry=$entry)');
+      throw FdsUnavailableException('no detail file for this run');
     }
     final url = entry['url'] as String;
     final objKey = entry['obj_key'] as String;
-    var body = (await http
-            .get(Uri.parse(url))
-            .timeout(const Duration(seconds: 30)))
-        .body
-        .trim();
+    final dl =
+        await http.get(Uri.parse(url)).timeout(const Duration(seconds: 30));
+    // gen_download_url returns a presigned URL even when the object has been
+    // evicted from the store; the object GET then 404s ("Object Not Found").
+    // Xiaomi purges some detail files irregularly, so this is expected.
+    if (dl.statusCode != 200) {
+      throw FdsUnavailableException(
+          'object not found on FDS (HTTP ${dl.statusCode})');
+    }
+    var body = dl.body.trim();
     // The store returns the base64 ciphertext as a JSON string (quoted).
     if (body.startsWith('"') && body.endsWith('"')) {
       body = json.decode(body) as String;

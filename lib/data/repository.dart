@@ -1,14 +1,17 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:android_id/android_id.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../stats/best_efforts.dart';
+import '../stats/elevation.dart';
 import '../xiaomi/login.dart';
 import '../xiaomi/api.dart';
 import '../xiaomi/models.dart';
 import '../xiaomi/record_detail.dart';
+import '../xiaomi/gps_track.dart';
 
 /// Global app instance.
 final repo = Repository();
@@ -148,6 +151,86 @@ class Repository extends ChangeNotifier {
   Future<Uint8List> fdsRecordDetail(SportRecord r) {
     if (session == null) throw StateError('no session');
     return XiaomiApi(session!).fetchRecordDetail(r);
+  }
+
+  // --- GPS track + elevation (maps) ---
+  final Map<String, GpsTrack> _trackCache = {};
+  Directory? _tracksDir;
+
+  Future<Directory> _tracksDirectory() async {
+    if (_tracksDir != null) return _tracksDir!;
+    final base = await getApplicationSupportDirectory();
+    final d = Directory('${base.path}/gps_tracks');
+    if (!await d.exists()) await d.create(recursive: true);
+    return _tracksDir = d;
+  }
+
+  /// Fetches, decrypts and parses a run's GPS track (fileType=2).
+  ///
+  /// The decrypted blob is cached on disk the first time it is downloaded, so a
+  /// route stays available even after Xiaomi purges the detail file from FDS
+  /// (they expire after a few months). If the file is already gone from the
+  /// server and we never cached it, [XiaomiApi.fetchGpsDetail] throws an
+  /// [FdsUnavailableException].
+  Future<GpsTrack> fdsGpsTrack(SportRecord r) async {
+    final cached = _trackCache[r.id];
+    if (cached != null) return cached;
+
+    final dir = await _tracksDirectory();
+    final file = File('${dir.path}/${r.sid}_${r.time}_f2.bin');
+    Uint8List blob;
+    if (await file.exists()) {
+      blob = await file.readAsBytes();
+    } else {
+      if (session == null) throw StateError('no session');
+      blob = await XiaomiApi(session!).fetchGpsDetail(r);
+      try {
+        await file.writeAsBytes(blob, flush: true);
+      } catch (_) {
+        // caching is best-effort; a failed write must not break the map.
+      }
+    }
+    final track = parseGpsTrack(blob);
+    _trackCache[r.id] = track;
+    return track;
+  }
+
+  static const _kEleCache = 'elevation_cache_v1';
+  Map<String, ElevationProfile>? _eleCache;
+
+  Future<Map<String, ElevationProfile>> _loadEleCache() async {
+    if (_eleCache != null) return _eleCache!;
+    final p = await SharedPreferences.getInstance();
+    final out = <String, ElevationProfile>{};
+    final s = p.getString(_kEleCache);
+    if (s != null) {
+      try {
+        final m = json.decode(s) as Map<String, dynamic>;
+        for (final e in m.entries) {
+          out[e.key] = ElevationProfile.fromJson(e.value as Map<String, dynamic>);
+        }
+      } catch (_) {
+        // corrupt cache: start fresh.
+      }
+    }
+    return _eleCache = out;
+  }
+
+  /// Terrain-elevation profile for a run's track (DEM lookup via Open-Meteo).
+  /// Cached persistently by run id (the route never changes); only successful
+  /// lookups are stored, so a transient network failure can be retried.
+  Future<ElevationProfile?> runElevation(SportRecord r, GpsTrack track) async {
+    final cache = await _loadEleCache();
+    final hit = cache[r.id];
+    if (hit != null) return hit;
+    final profile = await fetchElevationProfile(track);
+    if (profile != null) {
+      cache[r.id] = profile;
+      final p = await SharedPreferences.getInstance();
+      await p.setString(_kEleCache, json.encode(
+          {for (final e in cache.entries) e.key: e.value.toJson()}));
+    }
+    return profile;
   }
 
   // --- Best efforts across runs (records by distance) ---

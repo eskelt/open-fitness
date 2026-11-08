@@ -10,6 +10,7 @@ import '../sports/sport.dart';
 import 'charts.dart';
 import 'format.dart';
 import 'i18n_helpers.dart';
+import 'route_map.dart';
 
 class SessionDetailScreen extends StatelessWidget {
   final SportRecord r;
@@ -81,6 +82,12 @@ class SessionDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           _section(context, t.detMetrics, _grid(metrics)),
+          if (sport.hasDistance && r.isOutdoor) ...[
+            const SizedBox(height: 20),
+            Text(t.secRoute, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 10),
+            RouteMapSection(r),
+          ],
           if (sport.hasDistance && r.distanceM >= 1000) ...[
             const SizedBox(height: 20),
             _section(context, t.secBestEfforts, _BestEffortsSection(r)),
