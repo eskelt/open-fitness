@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import '../data/repository.dart';
 import '../stats/elevation.dart';
+import '../xiaomi/api.dart' show FdsUnavailableException;
 import '../xiaomi/gps_track.dart';
 import '../xiaomi/models.dart';
 import 'format.dart';
@@ -60,11 +61,16 @@ class _RouteMapSectionState extends State<RouteMapSection> {
                     child: CircularProgressIndicator(strokeWidth: 2))),
           );
         }
+        final style = TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant);
+        if (snap.hasError) {
+          // "no download url" from FDS -> the server purged the detail file.
+          final expired = snap.error is FdsUnavailableException;
+          return Text(expired ? t.routeExpired : t.routeNoData, style: style);
+        }
         final track = snap.data;
-        if (snap.hasError || track == null || track.points.length < 2) {
-          return Text(t.routeNoData,
-              style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant));
+        if (track == null || track.points.length < 2) {
+          return Text(t.routeNoData, style: style);
         }
         final pts = [for (final p in track.points) LatLng(p.lat, p.lng)];
         return Column(

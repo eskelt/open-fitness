@@ -58,6 +58,7 @@
   "detAscent": "Ascent",
   "detDescent": "Descent",
   "routeNoData": "No GPS route for this session",
+  "routeExpired": "This session's route isn't available from Xiaomi's server",
   "elevNoData": "Elevation unavailable",
   "elevSource": "Terrain elevation (Open-Meteo DEM)",
 

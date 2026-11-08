@@ -57,6 +57,7 @@
   "detAscent": "Desnivel +",
   "detDescent": "Desnivel −",
   "routeNoData": "Sin ruta GPS en esta sesión",
+  "routeExpired": "La ruta de esta sesión no está disponible en el servidor de Xiaomi",
   "elevNoData": "Desnivel no disponible",
   "elevSource": "Elevación del terreno (DEM Open-Meteo)",
 

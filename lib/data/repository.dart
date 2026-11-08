@@ -1,8 +1,9 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:android_id/android_id.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../stats/best_efforts.dart';
 import '../stats/elevation.dart';
@@ -154,15 +155,42 @@ class Repository extends ChangeNotifier {
 
   // --- GPS track + elevation (maps) ---
   final Map<String, GpsTrack> _trackCache = {};
+  Directory? _tracksDir;
 
-  /// Fetches, decrypts and parses a run's GPS track (fileType=2). Cached in
-  /// memory for the session. Returns an empty track when the run has no GPS
-  /// file (e.g. indoor/treadmill).
+  Future<Directory> _tracksDirectory() async {
+    if (_tracksDir != null) return _tracksDir!;
+    final base = await getApplicationSupportDirectory();
+    final d = Directory('${base.path}/gps_tracks');
+    if (!await d.exists()) await d.create(recursive: true);
+    return _tracksDir = d;
+  }
+
+  /// Fetches, decrypts and parses a run's GPS track (fileType=2).
+  ///
+  /// The decrypted blob is cached on disk the first time it is downloaded, so a
+  /// route stays available even after Xiaomi purges the detail file from FDS
+  /// (they expire after a few months). If the file is already gone from the
+  /// server and we never cached it, [XiaomiApi.fetchGpsDetail] throws an
+  /// [FdsUnavailableException].
   Future<GpsTrack> fdsGpsTrack(SportRecord r) async {
-    if (session == null) throw StateError('no session');
     final cached = _trackCache[r.id];
     if (cached != null) return cached;
-    final track = parseGpsTrack(await XiaomiApi(session!).fetchGpsDetail(r));
+
+    final dir = await _tracksDirectory();
+    final file = File('${dir.path}/${r.sid}_${r.time}_f2.bin');
+    Uint8List blob;
+    if (await file.exists()) {
+      blob = await file.readAsBytes();
+    } else {
+      if (session == null) throw StateError('no session');
+      blob = await XiaomiApi(session!).fetchGpsDetail(r);
+      try {
+        await file.writeAsBytes(blob, flush: true);
+      } catch (_) {
+        // caching is best-effort; a failed write must not break the map.
+      }
+    }
+    final track = parseGpsTrack(blob);
     _trackCache[r.id] = track;
     return track;
   }

@@ -8,6 +8,17 @@ import 'crypto.dart';
 import 'login.dart';
 import 'models.dart';
 
+/// Thrown when an FDS detail file cannot be retrieved: the server returns no
+/// download URL, which in practice means Xiaomi has purged the file (detail
+/// blobs expire after a few months) or never had it. Distinct from network
+/// errors so the UI can say "no longer available" rather than "failed".
+class FdsUnavailableException implements Exception {
+  final String message;
+  FdsUnavailableException(this.message);
+  @override
+  String toString() => 'FdsUnavailableException: $message';
+}
+
 /// Client for the Mi Fitness data API (FitnessApiService), replicating the
 /// CloudInterceptor of 3.59.1i: signing + RC4-drop1024 + regional host.
 class XiaomiApi {
@@ -216,19 +227,24 @@ class XiaomiApi {
     final resp = await getFDSDownloadUrls([r], fileType: fileType);
     final result = resp['result'];
     if (result is! Map || result.isEmpty) {
-      throw Exception('FDS: no download url (${resp['message']})');
+      throw FdsUnavailableException('no download url (${resp['message']})');
     }
     final entry = result.values.first;
     if (entry is! Map || entry['url'] == null || entry['obj_key'] == null) {
-      throw Exception('FDS: no detail file for this run (entry=$entry)');
+      throw FdsUnavailableException('no detail file for this run');
     }
     final url = entry['url'] as String;
     final objKey = entry['obj_key'] as String;
-    var body = (await http
-            .get(Uri.parse(url))
-            .timeout(const Duration(seconds: 30)))
-        .body
-        .trim();
+    final dl =
+        await http.get(Uri.parse(url)).timeout(const Duration(seconds: 30));
+    // gen_download_url returns a presigned URL even when the object has been
+    // evicted from the store; the object GET then 404s ("Object Not Found").
+    // Xiaomi purges some detail files irregularly, so this is expected.
+    if (dl.statusCode != 200) {
+      throw FdsUnavailableException(
+          'object not found on FDS (HTTP ${dl.statusCode})');
+    }
+    var body = dl.body.trim();
     // The store returns the base64 ciphertext as a JSON string (quoted).
     if (body.startsWith('"') && body.endsWith('"')) {
       body = json.decode(body) as String;
