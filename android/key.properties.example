@@ -1,0 +1,12 @@
+# Copy to android/key.properties and fill in to sign release builds locally.
+# This file (the .example) is safe to commit; key.properties and *.jks are NOT
+# (see .gitignore). In CI these values come from repository secrets instead.
+#
+# Create a keystore once:
+#   keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 \
+#     -validity 10000 -alias upload
+# then place upload-keystore.jks under android/app/ and fill in below.
+storeFile=upload-keystore.jks
+storePassword=CHANGEME
+keyAlias=upload
+keyPassword=CHANGEME

@@ -1,0 +1,69 @@
+name: Release
+
+# On pushing a version tag (e.g. 0.5.0), build the release APK, attach it with a
+# checksum, and publish a GitHub Release. Turns the manual release dance into
+# `git tag X.Y.Z && git push origin X.Y.Z`.
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Optional proper signing: active only when the repo has the keystore
+      # secrets set. Without them the build falls back to debug signing (see
+      # android/app/build.gradle.kts), so the workflow still works out of the box.
+      - name: Configure release signing
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        if: ${{ env.KEYSTORE_B64 != '' }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storeFile=upload-keystore.jks
+          storePassword=$STORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Package artifacts
+        run: |
+          VER="${GITHUB_REF_NAME}"
+          cp build/app/outputs/flutter-apk/app-release.apk "open-fitness-${VER}.apk"
+          sha256sum "open-fitness-${VER}.apk" > "open-fitness-${VER}.apk.sha256"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Open Fitness ${{ github.ref_name }}"
+          generate_release_notes: true
+          files: |
+            open-fitness-*.apk
+            open-fitness-*.apk.sha256
