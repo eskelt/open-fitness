@@ -101,6 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   Future<void> _doLogin() async {
+    final t = L.of(context);
     setState(() {
       _busy = true;
       _error = null;
@@ -131,6 +132,17 @@ class _LoginScreenState extends State<LoginScreen> {
           extraCookies = cookies;
         }
       }
+    } on XiaomiLoginException catch (e) {
+      // Friendly, localized messages for the common cases; raw text otherwise.
+      final String msg;
+      if (e.captcha) {
+        msg = t.loginCaptcha;
+      } else if (e.code == 70016) {
+        msg = t.loginBadCredentials;
+      } else {
+        msg = e.toString();
+      }
+      setState(() => _error = msg);
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {

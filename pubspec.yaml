@@ -47,6 +47,8 @@ dependencies:
   flutter_map: ^8.3.2
   latlong2: ^0.10.1
   path_provider: ^2.1.5    # app directory to cache GPS tracks on disk
+  package_info_plus: 8.0.2
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

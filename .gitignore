@@ -48,3 +48,9 @@ app.*.map.json
 /BACKLOG.md
 /ARCHITECTURE.md
 /ROADMAP.md
+
+# Android release signing (never commit real keystores or passwords)
+/android/key.properties
+/android/app/upload-keystore.jks
+*.jks
+*.keystore

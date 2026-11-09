@@ -61,7 +61,17 @@ class XiaomiVerificationRequired implements Exception {
 
 class XiaomiLoginException implements Exception {
   final String message;
-  XiaomiLoginException(this.message);
+
+  /// Xiaomi Passport error code when known. 70016 = wrong username/password.
+  final int? code;
+
+  /// True when the response carried a `captchaUrl`: after several failed
+  /// attempts Xiaomi demands a captcha the app can't show, so every later
+  /// attempt keeps failing (even with the right password) until it's cleared
+  /// in the official app or at account.xiaomi.com.
+  final bool captcha;
+
+  XiaomiLoginException(this.message, {this.code, this.captcha = false});
   @override
   String toString() => message;
 }
@@ -119,7 +129,10 @@ class XiaomiLogin {
       final code = m['code'];
       if (code != 0) {
         throw XiaomiLoginException(
-            'Login failed (code=$code): ${m['description'] ?? m['desc'] ?? raw}');
+          'Login failed (code=$code): ${m['description'] ?? m['desc'] ?? raw}',
+          code: code is int ? code : int.tryParse('$code'),
+          captcha: m['captchaUrl'] != null,
+        );
       }
       if (securityStatus != 0) {
         throw XiaomiLoginException('securityStatus=$securityStatus (no 0)');
