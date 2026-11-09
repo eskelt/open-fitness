@@ -3,6 +3,7 @@ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'data/repository.dart';
 import 'locale_controller.dart';
+import 'units_controller.dart';
 import 'ui/root_shell.dart';
 import 'ui/settings_screen.dart';
 import 'ui/theme/theme.dart';
@@ -13,6 +14,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting();
   await localeController.load();
+  await unitsController.load();
   runApp(const OpenFitnessApp());
 }
 
@@ -20,14 +22,14 @@ class OpenFitnessApp extends StatelessWidget {
   const OpenFitnessApp({super.key});
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<Locale?>(
-      valueListenable: localeController,
-      builder: (context, locale, _) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([localeController, unitsController]),
+      builder: (context, _) {
         return MaterialApp(
           title: 'Open Fitness',
           debugShowCheckedModeBanner: false,
           theme: buildOpenFitnessTheme(),
-          locale: locale,
+          locale: localeController.value,
           localizationsDelegates: L.localizationsDelegates,
           supportedLocales: L.supportedLocales,
           home: const Gate(),

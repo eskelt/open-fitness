@@ -66,7 +66,7 @@ class _MonthCard extends StatelessWidget {
     final raw = DateFormat('MMMM yyyy', locale).format(group.month);
     final month = raw.isEmpty ? raw : raw[0].toUpperCase() + raw.substring(1);
     final subtitle =
-        '${t.statRuns(totals.count)}  ·  ${fmtDistanceKm(totals.distanceM, decimals: 1)} ${t.unitKm}';
+        '${t.statRuns(totals.count)}  ·  ${fmtDistance(totals.distanceM, decimals: 1)} ${distanceUnit(t)}';
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
       child: Theme(

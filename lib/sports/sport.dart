@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 /// Primary metric a sport is measured by (for the summary/records).
 enum PrimaryMetric { distance, duration }
 
+/// A per-second data channel that can be plotted as a line chart on the session
+/// detail. Which ones a sport offers is declared in [Sport.chartChannels]; the
+/// UI renders only the channels it currently supports and that have real data,
+/// so adding a sport (or, later, a new channel like power) needs no UI changes.
+enum TrackChannel { pace, speed, hr, cadence, elevation, power }
+
 /// Definition of a sport: how it is shown and which metrics make sense to
 /// display. Designed to grow (cycling, swimming, strength...) without touching
 /// the UI.
@@ -18,6 +24,10 @@ class Sport {
   final bool hasSwolf; // swimming
   final bool hasSteps;
 
+  /// Per-second line charts to offer on the session detail, in display order.
+  /// The UI still only shows a channel when the data is actually present.
+  final List<TrackChannel> chartChannels;
+
   const Sport({
     required this.category,
     required this.icon,
@@ -29,6 +39,7 @@ class Sport {
     this.hasStride = true,
     this.hasSwolf = false,
     this.hasSteps = true,
+    this.chartChannels = const [TrackChannel.pace, TrackChannel.hr],
   });
 }
 
@@ -56,6 +67,8 @@ class Sports {
     hasCadence: true,
     hasStride: false,
     hasSteps: false,
+    // Cyclists read speed, not pace (speed chart lands in a later iteration).
+    chartChannels: [TrackChannel.speed, TrackChannel.hr],
   );
   static const swimming = Sport(
     category: 'swimming',
@@ -77,6 +90,7 @@ class Sports {
     hasCadence: false,
     hasStride: false,
     hasSteps: false,
+        chartChannels: [TrackChannel.hr],
   );
   static const strength = Sport(
     category: 'strength_training',
@@ -88,6 +102,7 @@ class Sports {
     hasCadence: false,
     hasStride: false,
     hasSteps: false,
+        chartChannels: [TrackChannel.hr],
   );
   static const freeTraining = Sport(
     category: 'free_training',
@@ -99,6 +114,7 @@ class Sports {
     hasCadence: false,
     hasStride: false,
     hasSteps: false,
+        chartChannels: [TrackChannel.hr],
   );
   static const rockClimbing = Sport(
     category: 'rock_climbing',
@@ -110,6 +126,7 @@ class Sports {
     hasCadence: false,
     hasStride: false,
     hasSteps: false,
+        chartChannels: [TrackChannel.hr],
   );
   static const canoeing = Sport(
     category: 'canoeing',
@@ -148,5 +165,6 @@ class Sports {
         hasCadence: false,
         hasStride: false,
         hasSteps: false,
+        chartChannels: [TrackChannel.hr],
       );
 }

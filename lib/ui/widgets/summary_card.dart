@@ -37,9 +37,9 @@ class SummaryCard extends StatelessWidget {
     // Primary metric: distance for distance sports, otherwise time.
     final useDistance = sport.hasDistance;
     final heroValue = useDistance
-        ? fmtDistanceKm(totals.distanceM, decimals: 1)
+        ? fmtDistance(totals.distanceM, decimals: 1)
         : fmtDurationLong(totals.durationSec);
-    final heroUnit = useDistance ? t.unitKm : '';
+    final heroUnit = useDistance ? distanceUnit(t) : '';
     final cur = useDistance ? totals.distanceM : totals.durationSec;
     final prev = previous == null
         ? null
@@ -50,7 +50,7 @@ class SummaryCard extends StatelessWidget {
       if (useDistance)
         _mini(context, fmtDurationLong(totals.durationSec), ''),
       if (sport.hasPace && totals.avgPace > 0)
-        _mini(context, fmtPace(totals.avgPace), t.paceUnit),
+        _mini(context, fmtPace(totals.avgPace), paceUnit(t)),
       if (totals.avgHr > 0) _mini(context, '${totals.avgHr}', t.unitBpm),
       _mini(context, '${totals.calories}', t.unitKcal),
     ];
