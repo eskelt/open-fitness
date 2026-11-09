@@ -82,7 +82,21 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _user = TextEditingController();
   final _pass = TextEditingController();
-  String _region = 'de';
+
+  // Each UI location maps to its Xiaomi health data-center code, as returned by
+  // the server's `region/country_to_region` (e.g. India is served by `i2`, not
+  // the non-existent `in.hlth.io.mi.com`; India and the Americas share `i2`).
+  static const Map<String, String> _regionByLocation = {
+    'europe': 'de',
+    'asia': 'sg',
+    'india': 'i2',
+    'russia': 'ru',
+    'america': 'i2',
+    'china': 'cn',
+  };
+  String _location = 'europe';
+  String get _serverRegion => _regionByLocation[_location] ?? 'de';
+
   bool _busy = false;
   String? _error;
 
@@ -99,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
       for (var attempt = 0; attempt < 2; attempt++) {
         try {
           await repo.login(_user.text.trim(), _pass.text,
-              region: _region, extraCookies: extraCookies);
+              region: _serverRegion, extraCookies: extraCookies);
           widget.onLogin();
           return;
         } on XiaomiVerificationRequired catch (e) {
@@ -173,19 +187,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _region,
+                  value: _location,
                   decoration: InputDecoration(
                       labelText: t.region,
                       border: const OutlineInputBorder()),
                   items: [
-                    DropdownMenuItem(value: 'de', child: Text(t.regionEurope)),
-                    DropdownMenuItem(value: 'sg', child: Text(t.regionAsia)),
-                    DropdownMenuItem(value: 'in', child: Text(t.regionIndia)),
-                    DropdownMenuItem(value: 'ru', child: Text(t.regionRussia)),
-                    DropdownMenuItem(value: 'i2', child: Text(t.regionAmerica)),
-                    DropdownMenuItem(value: 'cn', child: Text(t.regionChina)),
+                    DropdownMenuItem(
+                        value: 'europe', child: Text(t.regionEurope)),
+                    DropdownMenuItem(value: 'asia', child: Text(t.regionAsia)),
+                    DropdownMenuItem(
+                        value: 'india', child: Text(t.regionIndia)),
+                    DropdownMenuItem(
+                        value: 'russia', child: Text(t.regionRussia)),
+                    DropdownMenuItem(
+                        value: 'america', child: Text(t.regionAmerica)),
+                    DropdownMenuItem(value: 'china', child: Text(t.regionChina)),
                   ],
-                  onChanged: (v) => setState(() => _region = v ?? 'de'),
+                  onChanged: (v) => setState(() => _location = v ?? 'europe'),
                 ),
                 const SizedBox(height: 20),
                 FilledButton(

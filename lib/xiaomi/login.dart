@@ -20,6 +20,15 @@ class XiaomiSession {
     required this.region,
   });
 
+  XiaomiSession copyWith({String? region}) => XiaomiSession(
+        ssecurity: ssecurity,
+        cUserId: cUserId,
+        userId: userId,
+        passToken: passToken,
+        serviceToken: serviceToken,
+        region: region ?? this.region,
+      );
+
   Map<String, dynamic> toJson() => {
         'ssecurity': ssecurity,
         'cUserId': cUserId,

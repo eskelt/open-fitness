@@ -27,6 +27,11 @@ class XiaomiApi {
 
   XiaomiApi(this.session);
 
+  /// The region codes that have a live `*.hlth.io.mi.com` host. Used to
+  /// auto-recover when the selected code has no host (e.g. India's `in.`, which
+  /// does not resolve, so those accounts live on another cluster).
+  static const List<String> knownRegions = ['de', 'sg', 'i2', 'us', 'ru', 'cn'];
+
   /// Regional host: for region != cn, `region.` is prepended to the host
   /// (RegionUrlSwitcherImpl.getUrlWithRegionIfNeed).
   String get _host => (session.region.isNotEmpty && session.region != 'cn')
