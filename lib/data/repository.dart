@@ -153,6 +153,19 @@ class Repository extends ChangeNotifier {
     return XiaomiApi(session!).fetchRecordDetail(r);
   }
 
+  // Parsed per-second stream (distance + HR), cached in memory by record id so
+  // the splits table and every per-second chart on a run detail share a single
+  // download + parse instead of fetching the blob once per section.
+  final Map<String, RecordTrack> _streamCache = {};
+
+  Future<RecordTrack> recordStream(SportRecord r) async {
+    final cached = _streamCache[r.id];
+    if (cached != null) return cached;
+    final track = parseRecordTrack(await fdsRecordDetail(r));
+    _streamCache[r.id] = track;
+    return track;
+  }
+
   // --- GPS track + elevation (maps) ---
   final Map<String, GpsTrack> _trackCache = {};
   Directory? _tracksDir;

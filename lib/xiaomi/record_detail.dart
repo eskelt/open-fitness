@@ -24,9 +24,11 @@ class RecordTrack {
 ///   - 30-byte header; sample count = little-endian int32 at offset 17.
 ///   - `count` samples of 13 bytes each, from offset 30, one per second.
 ///   - within a sample, byte +3 = distance covered that second, in decimeters
-///     (0.1 m); bytes +11..12 (LE uint16) = pace (s/km), +10 = HR, +1 = cadence.
+///     (0.1 m); byte +1 = heart rate (bpm). Verified live against the summary of
+///     a real run: byte +1 spans the record's exact min/max/avg HR (90/192/169),
+///     whereas byte +10 is a smoothed HR (compressed 161–175) — do not use it.
 RecordTrack parseRecordTrack(Uint8List blob) {
-  const start = 30, rec = 13, distOffset = 3, hrOffset = 10;
+  const start = 30, rec = 13, distOffset = 3, hrOffset = 1;
   if (blob.length < start + rec) return const RecordTrack([0.0]);
   final bd = ByteData.sublistView(blob);
   final declared = bd.getInt32(17, Endian.little);

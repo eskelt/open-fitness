@@ -50,9 +50,10 @@ String fmtPace(int secPerKm) {
 /// Pace unit label for the active system.
 String paceUnit(L t) => _imperial ? t.paceUnitMi : t.paceUnit;
 
-/// Speed m/s, formatted as km/h or mph depending on the active system.
-String fmtSpeed(double mps) {
-  final kmh = mps * 3.6;
+/// Speed given by the server in km/h, formatted as km/h or mph depending on the
+/// active system. (Mi Fitness' `avg_speed`/`max_speed` are already km/h — they
+/// are not m/s, so they must not be multiplied by 3.6.)
+String fmtSpeed(double kmh) {
   final v = _imperial ? kmh * _miPerKm : kmh;
   return v.toStringAsFixed(1);
 }

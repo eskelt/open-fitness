@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import '../data/repository.dart';
-import '../stats/elevation.dart';
 import '../xiaomi/api.dart' show FdsUnavailableException;
 import '../xiaomi/gps_track.dart';
 import '../xiaomi/models.dart';
-import '../units_controller.dart';
 import 'format.dart';
 
 const _agent = 'com.openfitness.app';
@@ -74,31 +71,22 @@ class _RouteMapSectionState extends State<RouteMapSection> {
           return Text(t.routeNoData, style: style);
         }
         final pts = [for (final p in track.points) LatLng(p.lat, p.lng)];
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                height: 240,
-                child: _RouteMap(
-                  points: pts,
-                  interactive: false,
-                  onExpand: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          _FullscreenMap(points: pts, title: t.secRoute),
-                    ),
-                  ),
+        // Map only. The elevation profile is a separate, distance-based chart
+        // (see _ElevationSection in session_detail.dart), like Strava/Garmin.
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            height: 240,
+            child: _RouteMap(
+              points: pts,
+              interactive: false,
+              onExpand: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => _FullscreenMap(points: pts, title: t.secRoute),
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            Text(t.secElevation,
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 10),
-            _ElevationCard(record: widget.record, track: track),
-          ],
+          ),
         );
       },
     );
@@ -279,201 +267,3 @@ class _Badge extends StatelessWidget {
   }
 }
 
-/// Fetches + shows the terrain-elevation profile (ascent/descent + chart).
-class _ElevationCard extends StatefulWidget {
-  final SportRecord record;
-  final GpsTrack track;
-  const _ElevationCard({required this.record, required this.track});
-  @override
-  State<_ElevationCard> createState() => _ElevationCardState();
-}
-
-class _ElevationCardState extends State<_ElevationCard> {
-  late final Future<ElevationProfile?> _future =
-      repo.runElevation(widget.record, widget.track);
-
-  @override
-  Widget build(BuildContext context) {
-    final t = L.of(context);
-    final theme = Theme.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: FutureBuilder<ElevationProfile?>(
-          future: _future,
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return const SizedBox(
-                height: 60,
-                child: Center(
-                    child: SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2))),
-              );
-            }
-            final p = snap.data;
-            if (p == null || p.isEmpty) {
-              return Text(t.elevNoData,
-                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant));
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                        child: _stat(context, t.detAscent,
-                            '+${fmtElevation(p.gain)} ${elevUnit(t)}',
-                            Icons.north_east, Colors.green.shade600)),
-                    Expanded(
-                        child: _stat(context, t.detDescent,
-                            '-${fmtElevation(p.loss)} ${elevUnit(t)}',
-                            Icons.south_east, Colors.red.shade600)),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                SizedBox(height: 150, child: _ElevationChart(profile: p)),
-                const SizedBox(height: 6),
-                Text(t.elevSource,
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: theme.colorScheme.onSurfaceVariant)),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _stat(BuildContext context, String label, String value, IconData icon,
-      Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
-            Text(value,
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w700)),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _ElevationChart extends StatelessWidget {
-  final ElevationProfile profile;
-  const _ElevationChart({required this.profile});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final t = L.of(context);
-    final color = theme.colorScheme.primary;
-    // The chart keeps its internal scale in km/m; axis labels and the tooltip
-    // are converted to the active unit (miles/feet) for display.
-    final spots = [
-      for (var i = 0; i < profile.eleM.length; i++)
-        FlSpot(profile.distKm[i], profile.eleM[i]),
-    ];
-    final maxX = profile.distKm.last;
-    // pad the y range a little so the line isn't glued to the edges
-    final span = (profile.maxEle - profile.minEle).clamp(4.0, double.infinity);
-    final pad = span * 0.15;
-    final minY = profile.minEle - pad;
-    final maxY = profile.maxEle + pad;
-    final yStep = ((maxY - minY) / 3).clamp(1.0, double.infinity);
-
-    return LineChart(
-      LineChartData(
-        minX: 0,
-        maxX: maxX <= 0 ? 1 : maxX,
-        minY: minY,
-        maxY: maxY,
-        lineTouchData: LineTouchData(
-          touchTooltipData: LineTouchTooltipData(
-            getTooltipColor: (_) => theme.colorScheme.surfaceContainerHighest,
-            getTooltipItems: (spots) => [
-              for (final s in spots)
-                LineTooltipItem(
-                  '${elevToUnit(s.y).round()} ${elevUnit(t)}\n'
-                      '${distanceKmToUnit(s.x).toStringAsFixed(2)} ${distanceUnit(t)}',
-                  TextStyle(
-                      color: theme.colorScheme.onSurface,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12),
-                ),
-            ],
-          ),
-        ),
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          horizontalInterval: yStep,
-          getDrawingHorizontalLine: (_) => FlLine(
-              color: theme.dividerColor.withValues(alpha: 0.25),
-              strokeWidth: 1),
-        ),
-        borderData: FlBorderData(show: false),
-        titlesData: FlTitlesData(
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 36,
-              interval: yStep,
-              getTitlesWidget: (v, _) => Text('${elevToUnit(v).round()}',
-                  style: TextStyle(
-                      fontSize: 10,
-                      color: theme.colorScheme.onSurfaceVariant)),
-            ),
-          ),
-          rightTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 22,
-              interval: (maxX / 4).clamp(0.5, double.infinity),
-              getTitlesWidget: (v, meta) {
-                if (v <= 0 || v >= maxX) return const SizedBox();
-                final xv = distanceKmToUnit(v);
-                return Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                      xv.toStringAsFixed(unitsController.imperial ? 1 : 0),
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: theme.colorScheme.onSurfaceVariant)),
-                );
-              },
-            ),
-          ),
-        ),
-        lineBarsData: [
-          LineChartBarData(
-            spots: spots,
-            isCurved: true,
-            curveSmoothness: 0.2,
-            color: color,
-            barWidth: 2,
-            dotData: const FlDotData(show: false),
-            belowBarData: BarAreaData(
-              show: true,
-              color: color.withValues(alpha: 0.15),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
