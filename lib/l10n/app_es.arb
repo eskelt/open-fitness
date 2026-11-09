@@ -151,5 +151,13 @@
   "recoverHours": "{h} h",
   "cmUnit": "cm",
   "about": "Acerca de",
-  "aboutText": "Open Fitness: gratis y de código abierto. Tus datos de carrera de Xiaomi, a tu manera."
+  "aboutText": "Open Fitness: gratis y de código abierto. Tus datos de carrera de Xiaomi, a tu manera.",
+  "updates": "Actualizaciones",
+  "checkUpdates": "Buscar actualizaciones",
+  "upToDate": "Tienes la última versión",
+  "checking": "Comprobando…",
+  "appVersion": "Versión {version}",
+  "updateAvailable": "Actualización disponible {version}",
+  "updateView": "Ver",
+  "updateDismiss": "Descartar"
 }

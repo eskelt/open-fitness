@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../data/repository.dart';
 import '../sports/sport.dart';
 import '../stats/stats.dart';
+import '../update/update_banner.dart';
 import '../xiaomi/models.dart';
 import 'charts.dart';
 import 'i18n_helpers.dart';
@@ -142,9 +143,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: LinearProgressIndicator(minHeight: 2))
             : null,
       ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: runs.isEmpty
+      body: Column(
+        children: [
+          const UpdateBanner(),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: runs.isEmpty
             ? ListView(children: [
                 const SizedBox(height: 120),
                 Center(
@@ -164,6 +169,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: _content(context, t, Sports.running, runs)),
                 ],
               ),
+            ),
+          ),
+        ],
       ),
     );
   }
