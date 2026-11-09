@@ -13,6 +13,8 @@
   "signIn": "Entrar",
   "verifyTitle": "Verificar este dispositivo",
   "passwordDisclaimer": "Tu contraseña solo se usa para el hash local del login de Xiaomi. No se guarda ni se envía a nadie salvo a los servidores oficiales de Xiaomi.",
+  "loginBadCredentials": "Usuario o contraseña incorrectos.",
+  "loginCaptcha": "Demasiados intentos — Xiaomi pide un captcha. Inicia sesión una vez en la app oficial de Mi Fitness o en account.xiaomi.com y vuelve a intentarlo aquí.",
   "errorPrefix": "Error: {message}",
   "settings": "Ajustes",
   "language": "Idioma",
